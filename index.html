@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebScraper</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f4f6;
+      color: #1a1a1a;
+      min-height: 100vh;
+    }
+
+    /* Top nav bar */
+    header {
+      background: #000;
+      padding: 0 40px;
+      display: flex;
+      align-items: center;
+      height: 60px;
+    }
+
+    header .logo {
+      color: #fff;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header .logo span {
+      color: #FFCC00;
+    }
+
+    /* Hero banner */
+    .hero {
+      background: #1a1a1a;
+      color: #fff;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .hero h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .hero p {
+      font-size: 15px;
+      color: #aaa;
+    }
+
+    /* Main content */
+    .container {
+      max-width: 760px;
+      margin: 40px auto;
+      padding: 0 20px 60px;
+    }
+
+    /* Instructions card */
+    .instructions-card {
+      background: #fff;
+      border-radius: 8px;
+      border-left: 5px solid #FFCC00;
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+
+    .instructions-card h2 {
+      font-size: 14px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #555;
+      margin-bottom: 12px;
+    }
+
+    .instructions-card ol {
+      padding-left: 20px;
+    }
+
+    .instructions-card li {
+      font-size: 14px;
+      color: #444;
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    .instructions-card li strong {
+      color: #1a1a1a;
+    }
+
+    /* Form card */
+    .form-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+
+    .field {
+      margin-bottom: 28px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    .url-input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .url-input-row input {
+      flex: 1;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid #ddd;
+      border-radius: 5px;
+      font-size: 15px;
+      color: #1a1a1a;
+      background: #fafafa;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus {
+      border-color: #FFCC00;
+      background: #fff;
+    }
+
+    input[type="number"] {
+      width: 100px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-block;
+      padding: 11px 22px;
+      border: none;
+      border-radius: 5px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: #FFCC00;
+      color: #1a1a1a;
+    }
+
+    .btn-primary:hover {
+      background: #e6b800;
+    }
+
+    .btn-submit {
+      background: #1a1a1a;
+      color: #fff;
+      padding: 13px 32px;
+      font-size: 15px;
+    }
+
+    .btn-submit:hover {
+      background: #333;
+    }
+
+    /* URL list */
+    #urlList {
+      list-style: none;
+      margin-top: 12px;
+    }
+
+    #urlList li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f9f9f9;
+      border: 1.5px solid #eee;
+      border-radius: 5px;
+      padding: 9px 14px;
+      margin-bottom: 6px;
+      font-size: 14px;
+      word-break: break-all;
+      color: #333;
+    }
+
+    #urlList li .remove-btn {
+      background: none;
+      border: none;
+      color: #bbb;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      margin-left: 12px;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+
+    #urlList li .remove-btn:hover {
+      color: #c0392b;
+    }
+
+    .no-urls-msg {
+      font-size: 13px;
+      color: #aaa;
+      margin-top: 10px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #eee;
+      margin: 28px 0;
+    }
+
+    /* Results section */
+    #results {
+      display: none;
+      margin-top: 32px;
+    }
+
+    .results-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      border-top: 4px solid #FFCC00;
+    }
+
+    .results-card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 24px;
+    }
+
+    .result-field {
+      margin-bottom: 20px;
+    }
+
+    .result-field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    #resultUrlList {
+      list-style: none;
+    }
+
+    #resultUrlList li {
+      background: #f9f9f9;
+      border: 1.5px solid #eee;
+      border-radius: 5px;
+      padding: 9px 14px;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #333;
+      word-break: break-all;
+    }
+
+    .result-depth-value {
+      display: inline-block;
+      background: #f9f9f9;
+      border: 1.5px solid #eee;
+      border-radius: 5px;
+      padding: 9px 14px;
+      font-size: 15px;
+      color: #333;
+      min-width: 60px;
+    }
+
+    /* Footer */
+    footer {
+      background: #1a1a1a;
+      color: #888;
+      text-align: center;
+      font-size: 12px;
+      padding: 20px;
+      margin-top: 60px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">Web<span>Scraper</span></div>
+  </header>
+
+  <div class="hero">
+    <h1>Welcome to WebScraper!</h1>
+    <p>Configure your scraping job below and submit when ready.</p>
+  </div>
+
+  <div class="container">
+
+    <div class="instructions-card">
+      <h2>Before you begin</h2>
+      <ol>
+        <li>Please enter the list of URLs you want scraped in the field <strong>"List of URLs"</strong>. Add each URL one at a time using the <strong>Add</strong> button.</li>
+        <li>Please enter the <strong>depth</strong> to go to. The default is <strong>3</strong> and the maximum allowed value is <strong>10</strong>.</li>
+      </ol>
+    </div>
+
+    <div class="form-card">
+      <form id="scraperForm">
+
+        <div class="field">
+          <label>List of URLs</label>
+          <div class="url-input-row">
+            <input type="text" id="urlInput" placeholder="https://example.com" autocomplete="off">
+            <button type="button" class="btn btn-primary" onclick="addUrl()">Add</button>
+          </div>
+          <ul id="urlList"></ul>
+          <p class="no-urls-msg" id="noUrlsMsg">No URLs added yet.</p>
+        </div>
+
+        <hr class="divider">
+
+        <div class="field">
+          <label for="depth">Depth</label>
+          <input type="number" id="depth" name="depth" value="3" min="1" max="10" required>
+        </div>
+
+        <button type="submit" class="btn btn-submit">Submit</button>
+
+      </form>
+    </div>
+
+    <div id="results">
+      <div class="results-card">
+        <h2>Submitted Values</h2>
+
+        <div class="result-field">
+          <label>List of URLs</label>
+          <ul id="resultUrlList"></ul>
+        </div>
+
+        <div class="result-field">
+          <label>Depth</label>
+          <span class="result-depth-value" id="resultDepth"></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    &copy; 2026 WebScraper. All rights reserved.
+  </footer>
+
+  <script>
+    const urls = [];
+
+    function addUrl() {
+      const input = document.getElementById('urlInput');
+      const url = input.value.trim();
+      if (!url) return;
+
+      urls.push(url);
+      renderUrlList();
+      input.value = '';
+      input.focus();
+    }
+
+    function removeUrl(index) {
+      urls.splice(index, 1);
+      renderUrlList();
+    }
+
+    function renderUrlList() {
+      const list = document.getElementById('urlList');
+      const noUrlsMsg = document.getElementById('noUrlsMsg');
+
+      list.innerHTML = '';
+      urls.forEach(function(url, index) {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = url;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'remove-btn';
+        btn.title = 'Remove';
+        btn.innerHTML = '&times;';
+        btn.onclick = function() { removeUrl(index); };
+        li.appendChild(span);
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+
+      noUrlsMsg.style.display = urls.length === 0 ? 'block' : 'none';
+    }
+
+    document.getElementById('urlInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addUrl();
+      }
+    });
+
+    document.getElementById('scraperForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      if (urls.length === 0) {
+        alert('Please add at least one URL.');
+        return;
+      }
+
+      const depth = document.getElementById('depth').value;
+      const resultList = document.getElementById('resultUrlList');
+
+      resultList.innerHTML = '';
+      urls.forEach(function(url) {
+        const li = document.createElement('li');
+        li.textContent = url;
+        resultList.appendChild(li);
+      });
+
+      document.getElementById('resultDepth').textContent = depth;
+      document.getElementById('results').style.display = 'block';
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+    });
+  </script>
+
+</body>
+</html>
