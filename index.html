@@ -298,6 +298,41 @@
       min-width: 60px;
     }
 
+    /* Status messages */
+    .status-msg {
+      display: none;
+      border-radius: 5px;
+      padding: 14px 18px;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+
+    .status-msg.success {
+      background: #f0faf4;
+      border: 1.5px solid #2ecc71;
+      color: #1a6b3a;
+    }
+
+    .status-msg.error {
+      background: #fff5f5;
+      border: 1.5px solid #e74c3c;
+      color: #8b1a1a;
+    }
+
+    .status-msg strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
+    .job-id {
+      font-family: monospace;
+      background: #e6f4ec;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-size: 13px;
+    }
+
     /* Footer */
     footer {
       background: #1a1a1a;
@@ -350,7 +385,18 @@
           <input type="number" id="depth" name="depth" value="3" min="1" max="10" required>
         </div>
 
-        <button type="submit" class="btn btn-submit">Submit</button>
+        <button type="submit" class="btn btn-submit" id="submitBtn">Submit</button>
+
+        <div class="status-msg" id="successMsg">
+          <strong>Job submitted successfully!</strong>
+          Your scrape job has been queued. Use the Job ID below to retrieve your results later.<br><br>
+          Job ID: <span class="job-id" id="jobIdDisplay"></span>
+        </div>
+
+        <div class="status-msg" id="errorMsg">
+          <strong>Submission failed</strong>
+          <span id="errorDetail">An unexpected error occurred. Please try again.</span>
+        </div>
 
       </form>
     </div>
@@ -426,7 +472,9 @@
       }
     });
 
-    document.getElementById('scraperForm').addEventListener('submit', function(e) {
+    const API_ENDPOINT = 'https://webscraper-alb-711936379.ap-southeast-2.elb.amazonaws.com';
+
+    document.getElementById('scraperForm').addEventListener('submit', async function(e) {
       e.preventDefault();
 
       if (urls.length === 0) {
@@ -434,19 +482,60 @@
         return;
       }
 
-      const depth = document.getElementById('depth').value;
-      const resultList = document.getElementById('resultUrlList');
+      const depth = parseInt(document.getElementById('depth').value);
+      const submitBtn = document.getElementById('submitBtn');
+      const successMsg = document.getElementById('successMsg');
+      const errorMsg = document.getElementById('errorMsg');
 
-      resultList.innerHTML = '';
-      urls.forEach(function(url) {
-        const li = document.createElement('li');
-        li.textContent = url;
-        resultList.appendChild(li);
-      });
+      // Reset status messages
+      successMsg.style.display = 'none';
+      errorMsg.style.display = 'none';
 
-      document.getElementById('resultDepth').textContent = depth;
-      document.getElementById('results').style.display = 'block';
-      document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+      // Loading state
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+
+      try {
+        const response = await fetch(API_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ urls: urls, depth: depth })
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(errorBody.message || 'Server returned ' + response.status);
+        }
+
+        const data = await response.json();
+
+        // Show submitted values
+        const resultList = document.getElementById('resultUrlList');
+        resultList.innerHTML = '';
+        urls.forEach(function(url) {
+          const li = document.createElement('li');
+          li.textContent = url;
+          resultList.appendChild(li);
+        });
+        document.getElementById('resultDepth').textContent = depth;
+        document.getElementById('results').style.display = 'block';
+
+        // Show success message with jobId
+        document.getElementById('jobIdDisplay').textContent = data.jobId;
+        successMsg.style.display = 'block';
+
+        successMsg.scrollIntoView({ behavior: 'smooth' });
+
+      } catch (err) {
+        document.getElementById('errorDetail').textContent = err.message || 'An unexpected error occurred. Please try again.';
+        errorMsg.style.display = 'block';
+        errorMsg.scrollIntoView({ behavior: 'smooth' });
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit';
+      }
     });
   </script>
 
