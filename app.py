@@ -24,8 +24,13 @@ class FormHandler(BaseHTTPRequestHandler):
 
             job_id = str(uuid.uuid4())
 
+            # EC2 log path
             with open('/home/ec2-user/submissions.log', 'a') as f:
                 f.write(f"{datetime.now()} - jobId={job_id} - {data}\n")
+
+            # Local dev log path - uncomment when testing locally
+            # with open('submissions.log', 'a') as f:
+            #     f.write(f"{datetime.now()} - jobId={job_id} - {data}\n")
 
             response = json.dumps({"jobId": job_id})
             self.send_response(200)
