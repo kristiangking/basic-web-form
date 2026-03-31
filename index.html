@@ -333,6 +333,57 @@
       font-size: 13px;
     }
 
+    /* Job Status section */
+    .status-card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      margin-top: 32px;
+    }
+
+    .status-card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 24px;
+    }
+
+    .job-status-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .job-status-row input {
+      flex: 1;
+    }
+
+    .job-status-result {
+      display: none;
+      margin-top: 20px;
+    }
+
+    .job-status-result label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    .job-status-value {
+      display: inline-block;
+      background: #f9f9f9;
+      border: 1.5px solid #eee;
+      border-radius: 5px;
+      padding: 9px 14px;
+      font-size: 15px;
+      color: #333;
+      font-weight: 600;
+    }
+
     /* Footer */
     footer {
       background: #1a1a1a;
@@ -417,6 +468,27 @@
       </div>
     </div>
 
+    <div class="status-card">
+      <h2>Get Job Status</h2>
+      <div class="field">
+        <label for="jobIdInput">Job ID</label>
+        <div class="job-status-row">
+          <input type="text" id="jobIdInput" placeholder="Enter Job ID" autocomplete="off">
+          <button type="button" class="btn btn-submit" id="getStatusBtn" onclick="getJobStatus()">Get Job Status</button>
+        </div>
+      </div>
+
+      <div class="job-status-result" id="jobStatusResult">
+        <label>Job Status</label>
+        <span class="job-status-value" id="jobStatusValue"></span>
+      </div>
+
+      <div class="status-msg" id="statusErrorMsg">
+        <strong>Request failed</strong>
+        <span id="statusErrorDetail">An unexpected error occurred. Please try again.</span>
+      </div>
+    </div>
+
   </div>
 
   <footer>
@@ -473,6 +545,48 @@
     });
 
     const API_ENDPOINT = 'http://webscraper-backend-alb-1076718769.ap-southeast-2.elb.amazonaws.com/scrape';
+    const STATUS_ENDPOINT = 'http://webscraper-backend-alb-1076718769.ap-southeast-2.elb.amazonaws.com/job-status';
+
+    async function getJobStatus() {
+      const jobId = document.getElementById('jobIdInput').value.trim();
+      const getStatusBtn = document.getElementById('getStatusBtn');
+      const jobStatusResult = document.getElementById('jobStatusResult');
+      const statusErrorMsg = document.getElementById('statusErrorMsg');
+
+      if (!jobId) {
+        alert('Please enter a Job ID.');
+        return;
+      }
+
+      // Reset
+      jobStatusResult.style.display = 'none';
+      statusErrorMsg.style.display = 'none';
+
+      // Loading state
+      getStatusBtn.disabled = true;
+      getStatusBtn.textContent = 'Fetching…';
+
+      try {
+        const response = await fetch(`${STATUS_ENDPOINT}?job_id=${encodeURIComponent(jobId)}`);
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(errorBody.message || 'Server returned ' + response.status);
+        }
+
+        const data = await response.json();
+        document.getElementById('jobStatusValue').textContent = data.job_status;
+        jobStatusResult.style.display = 'block';
+        jobStatusResult.scrollIntoView({ behavior: 'smooth' });
+
+      } catch (err) {
+        document.getElementById('statusErrorDetail').textContent = err.message || 'An unexpected error occurred. Please try again.';
+        statusErrorMsg.style.display = 'block';
+      } finally {
+        getStatusBtn.disabled = false;
+        getStatusBtn.textContent = 'Get Job Status';
+      }
+    }
 
     document.getElementById('scraperForm').addEventListener('submit', async function(e) {
       e.preventDefault();

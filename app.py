@@ -2,17 +2,51 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs
 import boto3
 
 class FormHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
-        if self.path == '/health':
+        parsed = urlparse(self.path)
+
+        if parsed.path == '/health':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({"status": "ok"}).encode())
+
+        elif parsed.path == '/job-status':
+            params = parse_qs(parsed.query)
+            job_id = params.get('job_id', [None])[0]
+
+            if not job_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"message": "job_id is required"}).encode())
+                return
+
+            dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-2')
+            table = dynamodb.Table('web_scraper_job_metadata')
+            result = table.get_item(Key={'job_id': job_id})
+
+            if 'Item' not in result:
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"message": "Job not found"}).encode())
+                return
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"job_status": result['Item']['job_status']}).encode())
+
         else:
             self.send_response(404)
             self.end_headers()
