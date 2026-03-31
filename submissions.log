@@ -2,3 +2,4 @@
 2026-03-30 08:55:47.063192 - jobId=4a53bcfa-9b72-49a3-9c36-211e1c419d27 - {'urls': ['www.google.com'], 'depth': 3}
 2026-03-30 08:55:52.669431 - jobId=f64089dc-0129-4a44-90e4-b3bd523be102 - {'urls': ['www.google.com'], 'depth': 3}
 2026-03-30 08:57:06.604345 - jobId=9a8a03ba-ad50-4d73-9236-d79b249883f2 - {'urls': ['www.google.com', 'www.news.com.au', 'www.smh.com.au'], 'depth': 4}
+2026-03-31 17:34:44.491664 - jobId=43354f34-d1ec-474d-9a4e-21a88070b7b4 - {'urls': ['www.google.com', 'www.news.com.au', 'www.smh.com.au', 'www.partly.com/'], 'depth': 2}

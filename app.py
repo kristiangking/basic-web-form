@@ -2,6 +2,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import uuid
 from datetime import datetime
+import boto3
 
 class FormHandler(BaseHTTPRequestHandler):
 
@@ -23,6 +24,39 @@ class FormHandler(BaseHTTPRequestHandler):
             data = json.loads(body)
 
             job_id = str(uuid.uuid4())
+            url_count = len(data['urls'])
+            max_depth = data['depth']
+
+            dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-2')
+            table = dynamodb.Table('web_scraper_job_metadata')
+            sqs = boto3.client('sqs', region_name='ap-southeast-2')
+            queue_url = sqs.get_queue_url(QueueName='job_urls_to_process')['QueueUrl']
+
+            # Step 1: Write to DynamoDB
+            table.put_item(Item={
+                'job_id': job_id,
+                'job_metadata': data,
+                'job_remaining_urls': url_count,
+                'job_status': 'PENDING',
+                'job_url_count': url_count
+            })
+
+            # Step 2: Write one SQS message per URL — rollback DynamoDB if this fails
+            try:
+                for url in data['urls']:
+                    sqs.send_message(
+                        QueueUrl=queue_url,
+                        MessageBody=json.dumps({
+                            'job_id': job_id,
+                            'max_depth': max_depth,
+                            'current_depth': 1,
+                            'top_level_url': url,
+                            'current_url': url
+                        })
+                    )
+            except Exception:
+                table.delete_item(Key={'job_id': job_id})
+                raise
 
             # EC2 log path
             with open('/home/ec2-user/submissions.log', 'a') as f:
