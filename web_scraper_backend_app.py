@@ -47,6 +47,55 @@ class FormHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"job_status": result['Item']['job_status']}).encode())
 
+        elif parsed.path == '/job-results':
+            params = parse_qs(parsed.query)
+            job_id = params.get('job_id', [None])[0]
+
+            if not job_id:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"message": "job_id is required"}).encode())
+                return
+
+            dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-2')
+            metadata_table = dynamodb.Table('web_scraper_job_metadata')
+            results_table = dynamodb.Table('web_scraper_job_results')
+
+            # Step 1: Validate job exists
+            metadata = metadata_table.get_item(Key={'job_id': job_id})
+            if 'Item' not in metadata:
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"message": "Invalid Job ID - please enter a valid Job ID"}).encode())
+                return
+
+            # Step 2: Check job is COMPLETE
+            if metadata['Item']['job_status'] != 'COMPLETE':
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"message": "Job is not yet complete."}).encode())
+                return
+
+            # Step 3: Retrieve image_tags for each URL
+            urls = metadata['Item']['job_metadata']['urls']
+            job_results = []
+            for url in urls:
+                result = results_table.get_item(Key={'top_level_url': url, 'job_id': job_id})
+                image_tags = result['Item']['image_tags'] if 'Item' in result else []
+                job_results.append({'url': url, 'image_tags': image_tags})
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({"job_id": job_id, "results": job_results}).encode())
+
         else:
             self.send_response(404)
             self.end_headers()

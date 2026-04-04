@@ -384,6 +384,41 @@
       font-weight: 600;
     }
 
+    /* Job Results section */
+    .results-url-block {
+      margin-bottom: 20px;
+      background: #f9f9f9;
+      border: 1.5px solid #eee;
+      border-radius: 5px;
+      padding: 14px 16px;
+    }
+
+    .results-url-block .url-heading {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+      word-break: break-all;
+    }
+
+    .results-url-block ul {
+      list-style: disc;
+      padding-left: 20px;
+      margin: 0;
+    }
+
+    .results-url-block ul li {
+      font-size: 14px;
+      color: #444;
+      margin-bottom: 4px;
+    }
+
+    .results-url-block .no-tags {
+      font-size: 13px;
+      color: #aaa;
+      font-style: italic;
+    }
+
     /* Footer */
     footer {
       background: #1a1a1a;
@@ -490,6 +525,24 @@
       </div>
     </div>
 
+    <div class="status-card">
+      <h2>Get Web Scraper Job Results</h2>
+      <div class="field">
+        <label for="jobResultsIdInput">Job ID</label>
+        <div class="job-status-row">
+          <input type="text" id="jobResultsIdInput" placeholder="Enter Job ID" autocomplete="off">
+          <button type="button" class="btn btn-submit" id="getResultsBtn" onclick="getJobResults()">Get Job Results</button>
+        </div>
+      </div>
+
+      <div id="jobResultsOutput"></div>
+
+      <div class="status-msg" id="resultsErrorMsg">
+        <strong>Request failed</strong>
+        <span id="resultsErrorDetail">An unexpected error occurred. Please try again.</span>
+      </div>
+    </div>
+
   </div>
 
   <footer>
@@ -547,6 +600,7 @@
 
     const API_ENDPOINT = 'http://webscraper-backend-alb-1076718769.ap-southeast-2.elb.amazonaws.com/scrape';
     const STATUS_ENDPOINT = 'http://webscraper-backend-alb-1076718769.ap-southeast-2.elb.amazonaws.com/job-status';
+    const RESULTS_ENDPOINT = 'http://webscraper-backend-alb-1076718769.ap-southeast-2.elb.amazonaws.com/job-results';
 
     async function getJobStatus() {
       const jobId = document.getElementById('jobIdInput').value.trim();
@@ -586,6 +640,78 @@
       } finally {
         getStatusBtn.disabled = false;
         getStatusBtn.textContent = 'Get Job Status';
+      }
+    }
+
+    async function getJobResults() {
+      const jobId = document.getElementById('jobResultsIdInput').value.trim();
+      const getResultsBtn = document.getElementById('getResultsBtn');
+      const jobResultsOutput = document.getElementById('jobResultsOutput');
+      const resultsErrorMsg = document.getElementById('resultsErrorMsg');
+
+      if (!jobId) {
+        alert('Please enter a Job ID.');
+        return;
+      }
+
+      // Reset
+      jobResultsOutput.innerHTML = '';
+      resultsErrorMsg.style.display = 'none';
+
+      // Loading state
+      getResultsBtn.disabled = true;
+      getResultsBtn.textContent = 'Fetching…';
+
+      try {
+        const response = await fetch(`${RESULTS_ENDPOINT}?job_id=${encodeURIComponent(jobId)}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Server returned ' + response.status);
+        }
+
+        // Handle not-yet-complete message
+        if (data.message) {
+          jobResultsOutput.innerHTML = `<p style="color:#888;font-size:14px;margin-top:12px;">${data.message}</p>`;
+          return;
+        }
+
+        // Render results
+        data.results.forEach(function(item) {
+          const block = document.createElement('div');
+          block.className = 'results-url-block';
+
+          const heading = document.createElement('div');
+          heading.className = 'url-heading';
+          heading.textContent = item.url;
+          block.appendChild(heading);
+
+          if (!item.image_tags || item.image_tags.length === 0) {
+            const noTags = document.createElement('p');
+            noTags.className = 'no-tags';
+            noTags.textContent = 'No image tags found.';
+            block.appendChild(noTags);
+          } else {
+            const ul = document.createElement('ul');
+            item.image_tags.forEach(function(tag) {
+              const li = document.createElement('li');
+              li.textContent = tag;
+              ul.appendChild(li);
+            });
+            block.appendChild(ul);
+          }
+
+          jobResultsOutput.appendChild(block);
+        });
+
+        jobResultsOutput.scrollIntoView({ behavior: 'smooth' });
+
+      } catch (err) {
+        document.getElementById('resultsErrorDetail').textContent = err.message || 'An unexpected error occurred. Please try again.';
+        resultsErrorMsg.style.display = 'block';
+      } finally {
+        getResultsBtn.disabled = false;
+        getResultsBtn.textContent = 'Get Job Results';
       }
     }
 
