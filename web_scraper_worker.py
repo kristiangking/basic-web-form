@@ -2,16 +2,22 @@
 import json
 # Import the time library for sleep operations if needed
 import time
+# Import urllib.robotparser to parse and respect robots.txt rules
+import urllib.robotparser
+# Import urlparse and urljoin from urllib.parse for URL manipulation
+from urllib.parse import urlparse, urljoin
 # Import boto3, the AWS SDK for Python, to interact with AWS services
 import boto3
 # Import boto3 DynamoDB conditions for building query expressions
 from boto3.dynamodb.conditions import Key
 # Import BeautifulSoup from bs4 for parsing HTML content
 from bs4 import BeautifulSoup
-# Import urljoin to resolve relative URLs into absolute URLs
-from urllib.parse import urljoin
 # Import requests to make HTTP requests to web pages
 import requests
+# Import hashlib to generate MD5 hashes of image URLs for use as sort keys
+import hashlib
+# Import requests HTTPError for catching HTTP-specific errors
+from requests.exceptions import HTTPError
 # Import ClientError to handle AWS SDK exceptions
 from botocore.exceptions import ClientError
 
@@ -38,6 +44,38 @@ visited_urls_table = dynamodb.Table('web_scraper_visited_urls')
 # Retrieve the SQS queue URL using the queue name
 queue_url = sqs.get_queue_url(QueueName=QUEUE_NAME)['QueueUrl']
 
+# In-memory cache of robots.txt parsers keyed by domain, to avoid fetching robots.txt on every request
+robots_cache = {}
+
+
+def is_allowed_by_robots(url):
+    # Parse the URL to extract the scheme and domain
+    parsed = urlparse(url)
+    # Construct the base URL for the robots.txt file using the scheme and domain
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+    # Check if we have already fetched and cached the robots.txt for this domain
+    if base_url not in robots_cache:
+        # Create a new robots.txt parser instance
+        rp = urllib.robotparser.RobotFileParser()
+        # Set the URL of the robots.txt file for this domain
+        rp.set_url(f"{base_url}/robots.txt")
+        try:
+            # Fetch and parse the robots.txt file
+            rp.read()
+        except Exception:
+            # If robots.txt cannot be fetched, assume all URLs are allowed
+            robots_cache[base_url] = None
+            return True
+        # Store the parsed robots.txt in the cache for this domain
+        robots_cache[base_url] = rp
+    # Retrieve the cached robots.txt parser for this domain
+    rp = robots_cache[base_url]
+    # If no parser is available (fetch failed), allow the URL
+    if rp is None:
+        return True
+    # Check if our User-Agent is allowed to fetch the given URL
+    return rp.can_fetch('Mozilla/5.0', url)
+
 
 def parse_message(body):
     # Define the list of fields that must be present in every SQS message
@@ -51,6 +89,12 @@ def parse_message(body):
 
 
 def scrape_page(url):
+    # Check if the URL is allowed by the site's robots.txt before scraping
+    if not is_allowed_by_robots(url):
+        # Log that the URL is disallowed by robots.txt and return empty results
+        print(f"Skipping {url} — disallowed by robots.txt")
+        return [], []
+
     # Initialise an empty list to store image src URLs found on the page
     image_tags = []
     # Initialise an empty list to store child URLs found via <a href> links
@@ -60,8 +104,9 @@ def scrape_page(url):
 
     # Loop through pages, following pagination links until there are no more
     while next_url:
-        # Make an HTTP GET request to the current URL with a browser-like User-Agent header and a 30 second timeout
-        response = requests.get(next_url, timeout=30, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+        # Make an HTTP GET request with a browser-like User-Agent header
+        # timeout=(10, 30) sets a 10 second connect timeout and a 30 second read timeout
+        response = requests.get(next_url, timeout=(10, 30), headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
         # Raise an exception if the HTTP response indicates an error
         response.raise_for_status()
         # Parse the HTML response content using BeautifulSoup
@@ -101,9 +146,12 @@ def save_image_tags(job_id, top_level_url, image_tags):
         with image_tags_table.batch_writer() as batch:
             # Iterate over each unique image tag URL
             for image_url in unique_image_tags:
-                # Write one row per image URL with job_id, image_url, and top_level_url
+                # Generate an MD5 hash of the image URL to use as the sort key, avoiding the 1024 byte limit
+                image_url_hash = hashlib.md5(image_url.encode()).hexdigest()
+                # Write one row per image URL with job_id, hash as sort key, full URL, and top_level_url
                 batch.put_item(Item={
                     'job_id': job_id,
+                    'image_url_hash': image_url_hash,
                     'image_url': image_url,
                     'top_level_url': top_level_url
                 })
@@ -308,7 +356,22 @@ def main():
             try:
                 # Call the process_message function to handle the message
                 process_message(message)
-            # Catch any exception that occurs during message processing
+            # Catch HTTP errors separately to handle permanent vs transient failures differently
+            except HTTPError as e:
+                # Check if the error is a permanent 4xx client error
+                if e.response is not None and 400 <= e.response.status_code < 500:
+                    # Log the permanent failure
+                    print(f"Permanent HTTP error for message, deleting from queue: {e}")
+                    # Parse the body to extract job details for metadata update
+                    body = json.loads(message['Body'])
+                    # Decrement job_remaining_urls since this URL will not be retried
+                    update_job_metadata(body['job_id'], int(body['current_depth']), int(body['max_depth']), 0)
+                    # Delete the message from SQS to prevent it retrying indefinitely
+                    sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=message['ReceiptHandle'])
+                else:
+                    # For 5xx or other transient errors, log and allow the message to retry
+                    print(f"Transient HTTP error, message will retry after visibility timeout: {e}")
+            # Catch any other exception that occurs during message processing
             except Exception as e:
                 # Log the error so it can be investigated
                 print(f"Error processing message: {e}")
