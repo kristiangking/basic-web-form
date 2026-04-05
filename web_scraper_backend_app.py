@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from urllib.parse import urlparse, parse_qs
 import boto3
+from boto3.dynamodb.conditions import Key
 
 class FormHandler(BaseHTTPRequestHandler):
 
@@ -61,7 +62,7 @@ class FormHandler(BaseHTTPRequestHandler):
 
             dynamodb = boto3.resource('dynamodb', region_name='ap-southeast-2')
             metadata_table = dynamodb.Table('web_scraper_job_metadata')
-            results_table = dynamodb.Table('web_scraper_job_results')
+            image_tags_table = dynamodb.Table('web_scraper_image_tags')
 
             # Step 1: Validate job exists
             metadata = metadata_table.get_item(Key={'job_id': job_id})
@@ -82,13 +83,26 @@ class FormHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"message": "Job is not yet complete."}).encode())
                 return
 
-            # Step 3: Retrieve image_tags for each URL
+            # Step 3: Query all image tags for this job from web_scraper_image_tags
+            response = image_tags_table.query(
+                KeyConditionExpression=Key('job_id').eq(job_id)
+            )
+            # Group image tags by top_level_url
+            tags_by_url = {}
+            for item in response.get('Items', []):
+                top_url = item['top_level_url']
+                if top_url not in tags_by_url:
+                    tags_by_url[top_url] = []
+                tags_by_url[top_url].append(item['image_url'])
+
+            # Build results list using the original URLs from job metadata to preserve order
             urls = metadata['Item']['job_metadata']['urls']
             job_results = []
             for url in urls:
-                result = results_table.get_item(Key={'top_level_url': url, 'job_id': job_id})
-                image_tags = result['Item']['image_tags'] if 'Item' in result else []
-                job_results.append({'url': url, 'image_tags': image_tags})
+                job_results.append({
+                    'url': url,
+                    'image_tags': tags_by_url.get(url, [])
+                })
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
